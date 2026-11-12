@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Michelson Interferometer</title>
+<style>
+:root{--bg:#0B1A2B;--fg:#EEE8D8;--mut:#8C99A8;--g:#7FD4A8;--y:#E8B23A;--bd:#27445F;--card:rgba(14,33,53,.78)}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:var(--bg);background-image:linear-gradient(rgba(255,255,255,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.045) 1px,transparent 1px);background-size:26px 26px;color:var(--fg);font-family:-apple-system,"Segoe UI","Sarabun","Noto Sans Thai",sans-serif;height:100vh;height:100dvh;display:flex;flex-direction:column;overflow:hidden;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
+.mono{font-family:ui-monospace,Menlo,Consolas,monospace}
+header{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:10px 14px 6px}
+h1{font-size:21px;font-weight:800}
+.sub{color:var(--mut);font-size:13px;margin-top:2px}
+.hb{display:flex;gap:8px;flex-shrink:0}
+.ob{border:1px solid var(--bd);background:transparent;color:var(--fg);border-radius:8px;padding:6px 12px;font-size:14px;cursor:pointer;font-family:inherit}
+main{flex:1;min-height:0;display:flex;flex-direction:column;gap:8px;padding:0 12px}
+#stage{flex:1;min-height:0;display:flex;flex-direction:column;gap:8px}
+.pn{background:var(--card);border:1px solid var(--bd);border-radius:12px;min-height:0;overflow:hidden;position:relative}
+#appW{flex:0 0 38%}
+#scrW{flex:1}
+@media (orientation:landscape){#stage{flex-direction:row}#appW{flex:0 0 50%}}
+canvas{width:100%;height:100%;display:block}
+.rows{display:flex;flex-direction:column;gap:6px}
+.row{display:flex;gap:6px;align-items:center;overflow-x:auto;scrollbar-width:none;padding:1px;min-height:34px}
+.row::-webkit-scrollbar{display:none}
+.lb{color:var(--mut);font-size:12px;min-width:62px;flex-shrink:0}
+.ch{flex:0 0 auto;border:1px solid var(--bd);background:#0E2135;color:var(--fg);border-radius:999px;padding:6px 12px;font-size:14px;cursor:pointer;font-family:ui-monospace,Menlo,Consolas,monospace;touch-action:none}
+.ch.on{border-color:var(--g);color:var(--g);box-shadow:inset 0 0 0 1px var(--g)}
+.ch.hold.on{border-color:var(--y);color:var(--y);box-shadow:inset 0 0 0 1px var(--y)}
+.ch.pt{font-family:inherit;font-size:12px;padding:4px 10px}
+.ch.pt.on{border-color:var(--y);color:var(--y);box-shadow:inset 0 0 0 1px var(--y)}
+footer{padding:6px 12px calc(6px + env(safe-area-inset-bottom));text-align:center;color:var(--mut);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.md{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:10;padding:14px}
+.md.show{display:flex}
+.bx{background:#0F2236;border:1px solid var(--bd);border-radius:14px;padding:16px;width:min(560px,100%);max-height:92vh;overflow:auto;user-select:text;-webkit-user-select:text}
+.bx h2{font-size:17px;margin-bottom:10px}
+.bx h3{font-size:14px;color:var(--y);margin:14px 0 6px}
+.bx p,.bx li{font-size:13px;line-height:1.55;color:#D6D2C4}
+.bx ol{padding-left:20px}
+.bx input[type=text],.bx input[type=password]{width:100%;background:#0B1A2B;border:1px solid var(--bd);color:var(--fg);border-radius:8px;padding:8px 10px;font-size:15px;margin:4px 0}
+.fr{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0}
+.fr label{font-size:13px}
+.gb{background:var(--g);color:#0B1A2B;border:none;border-radius:8px;padding:8px 14px;font-weight:700;font-size:14px;cursor:pointer}
+table{border-collapse:collapse;width:100%;font-size:12.5px;margin-top:4px}
+td,th{border:1px solid var(--bd);padding:4px 6px;text-align:center}
+th{color:var(--mut);font-weight:600}
+.msg{font-size:12.5px;margin-top:4px;min-height:16px}
+.err{color:#FF8A80}.ok{color:var(--g)}
+.lk{word-break:break-all;font-size:11.5px;color:var(--mut);margin-top:4px}
+#lockTag{display:none;font-size:11px;color:var(--y);border:1px solid var(--y);border-radius:6px;padding:1px 6px;margin-left:6px;vertical-align:middle}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1><span data-t="title"></span><span id="lockTag" class="mono">🔒</span></h1>
+    <div class="sub" id="subT"></div>
+  </div>
+  <div class="hb">
+    <button class="ob" id="langB">ไทย</button>
+    <button class="ob" id="tchB" data-t="teacher"></button>
+  </div>
+</header>
+
+<main>
+  <div id="stage">
+    <div class="pn" id="appW"><canvas id="app"></canvas></div>
+    <div class="pn" id="scrW"><canvas id="scr"></canvas></div>
+  </div>
+  <div class="rows">
+    <div class="row">
+      <button class="ch pt" data-part="1" data-t="p1"></button>
+      <button class="ch pt" data-part="2" data-t="p2"></button>
+      <button class="ch pt" data-part="3" data-t="p3"></button>
+    </div>
+    <div class="row" id="rowA"></div>
+  </div>
+</main>
+
+<footer id="credit"></footer>
+
+<div class="md" id="pwM"><div class="bx">
+  <h2 data-t="tLogin"></h2>
+  <input type="password" id="pwI" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+  <div class="msg err" id="pwMsg"></div>
+  <div class="fr"><button class="gb" id="pwGo" data-t="enter"></button><button class="ob" data-close="pwM" data-t="close"></button></div>
+</div></div>
+
+<div class="md" id="tM"><div class="bx">
+  <h2 data-t="tPanel"></h2>
+  <h3 data-t="hSet"></h3>
+  <div class="fr"><input type="checkbox" id="nzI"><label for="nzI" data-t="noise"></label></div>
+  <div class="fr"><input type="checkbox" id="nmI"><label for="nmI" data-t="names"></label></div>
+  <div class="fr"><input type="checkbox" id="etI"><label for="etI" data-t="ether"></label></div>
+  <div class="fr"><button class="gb" id="apply" data-t="apply"></button><span class="msg ok" id="apMsg"></span></div>
+
+  <h3 data-t="hLink"></h3>
+  <div class="fr"><button class="gb" id="mkL" data-t="mk"></button><button class="ob" id="cpL" data-t="copy"></button></div>
+  <div class="msg" id="lkMsg"></div>
+  <div class="lk mono" id="lkOut"></div>
+
+  <h3 data-t="hAns"></h3>
+  <div id="ans"></div>
+  <h3 data-t="hGuide"></h3>
+  <div id="guide"></div>
+
+  <h3 data-t="hPw"></h3>
+  <input type="text" id="emI" data-ph="email" autocapitalize="off" autocorrect="off" spellcheck="false">
+  <input type="password" id="apI" data-ph="accpw" autocomplete="off">
+  <input type="password" id="npI" data-ph="newpw" autocomplete="off">
+  <div class="fr"><button class="ob" id="chPw" data-t="change"></button></div>
+  <div class="msg" id="pwChMsg"></div>
+  <div class="fr" style="margin-top:12px"><button class="ob" data-close="tM" data-t="close"></button></div>
+</div></div>
+
+<script>
+"use strict";
+/* ---------- constants ---------- */
+const LAS = [
+  {k:"A", nm:632.8, en:"He-Ne laser",        th:"เลเซอร์ฮีเลียม-นีออน"},
+  {k:"B", nm:532.0, en:"Green laser",        th:"เลเซอร์สีเขียว"},
+  {k:"C", nm:650.0, en:"Red diode laser",    th:"เลเซอร์ไดโอดสีแดง"},
+  {k:"D", nm:405.0, en:"Violet diode laser", th:"เลเซอร์ไดโอดสีม่วง"}
+];
+const LAM2 = 632.8;          // nm, Part 2 & 3 (He-Ne)
+const D0 = 500;              // µm, base arm-length difference (sets ring size)
+const THMAX = 0.10;          // rad, half field of view
+const CELL_L = 0.030;        // m, vacuum cell length
+const NM1 = 2.72e-4;         // n-1 of air at 101.3 kPa (633 nm, ~25 °C)
+const PATM = 101.3;          // kPa
+const ROT = [0, 45, 90, 135, 180];
+const PW_HASH = "8db889767c2c37605279743265bbe7e417a602cf63627e30551165e1f9f68e2e";
+const ACC_HASH = "69d0ed854dd5d0fba9e77187c888b01db5792c5d5cb34bce2d31255c19b8e4ba";
+const LS_PW = "mich_pw_hash", LS_SET = "mich_settings", KEY = "RJ-michelson";
+
+const T = {
+ en:{title:"Michelson Interferometer",sub1:"Wavelength of light",sub2:"Refractive index of air",sub3:"Michelson–Morley",
+  teacher:"Teacher",p1:"Part 1 · Wavelength",p2:"Part 2 · Air",p3:"Part 3 · Rotate",
+  laser:"Laser",mic:"Micrometer",pump:"Pump",air:"Air in",rot:"Rotate",
+  tLogin:"Teacher password",enter:"Enter",close:"Close",wrong:"Wrong password",tPanel:"Teacher",
+  hSet:"Settings",noise:"Small vibration of fringes",names:"Show laser names (otherwise A, B, C, D)",ether:"Part 3: show what the ether theory predicts (0.4 fringe shift)",
+  apply:"Apply",applied:"Applied",hLink:"Student link",mk:"Create link",copy:"Copy",copied:"Copied",
+  nullOrigin:"Links only work when this file is opened from a real website (e.g. GitHub Pages).",
+  hAns:"Answer key",hGuide:"Method",hPw:"Change password",email:"Email",accpw:"Account password",newpw:"New password",change:"Change",
+  pwOk:"Password changed",pwBad:"Email or account password incorrect",pwEmpty:"New password is empty",
+  credit:"Asst.Prof.Dr. Rossumont Jaryabhand · Rajamangala University of Technology Tawan-ok, Uthenthawai Campus · No Right Reserved"},
+ th:{title:"อินเตอร์เฟอโรมิเตอร์ของไมเคิลสัน",sub1:"ความยาวคลื่นแสง",sub2:"ดัชนีหักเหของอากาศ",sub3:"การทดลองของไมเคิลสัน–มอร์ลีย์",
+  teacher:"ครู",p1:"ตอนที่ 1 · ความยาวคลื่น",p2:"ตอนที่ 2 · อากาศ",p3:"ตอนที่ 3 · หมุนเครื่อง",
+  laser:"เลเซอร์",mic:"ไมโครมิเตอร์",pump:"สูบออก",air:"ปล่อยอากาศ",rot:"หมุน",
+  tLogin:"รหัสผ่านครู",enter:"เข้า",close:"ปิด",wrong:"รหัสผ่านไม่ถูกต้อง",tPanel:"ครู",
+  hSet:"ตั้งค่า",noise:"ริ้วสั่นเล็กน้อย",names:"แสดงชื่อเลเซอร์ (ถ้าไม่เลือก จะเป็น A, B, C, D)",ether:"ตอนที่ 3: แสดงผลตามทฤษฎีอีเธอร์ (ริ้วเลื่อน 0.4 ริ้ว)",
+  apply:"ใช้ค่านี้",applied:"ใช้แล้ว",hLink:"ลิงก์สำหรับนักศึกษา",mk:"สร้างลิงก์",copy:"คัดลอก",copied:"คัดลอกแล้ว",
+  nullOrigin:"ลิงก์ใช้ได้เมื่อเปิดไฟล์นี้จากเว็บจริงเท่านั้น (เช่น GitHub Pages)",
+  hAns:"เฉลย",hGuide:"วิธีทดลอง",hPw:"เปลี่ยนรหัสผ่าน",email:"อีเมล",accpw:"รหัสผ่านบัญชี",newpw:"รหัสผ่านใหม่",change:"เปลี่ยน",
+  pwOk:"เปลี่ยนรหัสผ่านแล้ว",pwBad:"อีเมลหรือรหัสผ่านบัญชีไม่ถูกต้อง",pwEmpty:"ยังไม่ได้ใส่รหัสผ่านใหม่",
+  credit:"ผศ.ดร.รสสุมนต์ จารยะพันธุ์ · มหาวิทยาลัยเทคโนโลยีราชมงคลตะวันออก อุเทนถวาย · ไม่สงวนลิขสิทธิ์"}
+};
+
+let lang = "en";
+const st = {part:1, las:0, d:3.0, P:PATM, rot:0, rotShow:0, rate:0, prate:0};
+let S = {noise:true, names:false, ether:false};
+let locked = false;
+function lsGet(k){try{return localStorage.getItem(k)}catch(e){return null}}
+function lsSet(k,v){try{localStorage.setItem(k,v)}catch(e){}}
+
+/* ---------- sha-256 (no network, works offline) ---------- */
+function sha256(str){
+  const b = Array.from(new TextEncoder().encode(str));
+  const K=[],H=[]; let n=2,c=0;
+  const fr=x=>((x-Math.floor(x))*4294967296)|0;
+  while(c<64){let p=true;for(let i=2;i*i<=n;i++)if(n%i===0){p=false;break}
+    if(p){if(c<8)H[c]=fr(Math.pow(n,1/2));K[c]=fr(Math.pow(n,1/3));c++}n++}
+  const l=b.length*8; b.push(0x80); while(b.length%64!==56)b.push(0);
+  for(let i=7;i>=0;i--) b.push(i>3?0:(l>>>(i*8))&255);
+  const rr=(v,a)=>(v>>>a)|(v<<(32-a));
+  let h=H.slice();
+  for(let j=0;j<b.length;j+=64){
+    const w=[];
+    for(let i=0;i<16;i++) w[i]=(b[j+4*i]<<24)|(b[j+4*i+1]<<16)|(b[j+4*i+2]<<8)|b[j+4*i+3];
+    for(let i=16;i<64;i++){const s0=rr(w[i-15],7)^rr(w[i-15],18)^(w[i-15]>>>3);const s1=rr(w[i-2],17)^rr(w[i-2],19)^(w[i-2]>>>10);w[i]=(w[i-16]+s0+w[i-7]+s1)|0}
+    let [A,B,Cc,D,E,F,G,Hh]=h;
+    for(let i=0;i<64;i++){const S1=rr(E,6)^rr(E,11)^rr(E,25);const ch=(E&F)^(~E&G);const t1=(Hh+S1+ch+K[i]+w[i])|0;
+      const S0=rr(A,2)^rr(A,13)^rr(A,22);const mj=(A&B)^(A&Cc)^(B&Cc);const t2=(S0+mj)|0;
+      Hh=G;G=F;F=E;E=(D+t1)|0;D=Cc;Cc=B;B=A;A=(t1+t2)|0}
+    h=[A,B,Cc,D,E,F,G,Hh].map((v,i)=>(v+h[i])|0);
+  }
+  return h.map(v=>(v>>>0).toString(16).padStart(8,"0")).join("");
+}
+const norm = s => (s||"").normalize("NFC").replace(/[‘’‛`´]/g,"'").replace(/[“”]/g,'"').trim();
+
+function enc(o){const s=JSON.stringify(o);let r="";for(let i=0;i<s.length;i++)r+=String.fromCharCode(s.charCodeAt(i)^KEY.charCodeAt(i%KEY.length));
+  return btoa(r).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"")}
+function dec(t){try{let s=t.replace(/-/g,"+").replace(/_/g,"/");while(s.length%4)s+="=";s=atob(s);let r="";
+  for(let i=0;i<s.length;i++)r+=String.fromCharCode(s.charCodeAt(i)^KEY.charCodeAt(i%KEY.length));return JSON.parse(r)}catch(e){return null}}
+function setFrom(o){return {noise:!!o.noise,names:!!o.names,ether:!!o.ether}}
+(function init(){
+  const q=new URLSearchParams(location.search).get("s");
+  if(q){const o=dec(q);if(o&&typeof o==="object"){S=setFrom(o);locked=true}}
+  if(!locked){const o=dec(lsGet(LS_SET)||"");if(o&&typeof o==="object")S=setFrom(o)}
+})();
+
+/* ---------- optics ---------- */
+function lam(){return st.part===1?LAS[st.las].nm:LAM2}        // nm
+function lasName(i){return S.names?LAS[i][lang]:LAS[i].k}
+function extraOPD(){ // µm, path added independent of angle
+  if(st.part===2) return 2*CELL_L*1e6*NM1*st.P/PATM;
+  return 0;
+}
+function etherShift(){ // fraction of a fringe
+  if(st.part!==3||!S.ether) return 0;
+  return 0.2*(1-Math.cos(2*st.rotShow*Math.PI/180));
+}
+function nmToRGB(w){let r=0,g=0,b=0;
+  if(w<440){r=-(w-440)/60;b=1}else if(w<490){g=(w-440)/50;b=1}else if(w<510){g=1;b=-(w-510)/20}
+  else if(w<580){r=(w-510)/70;g=1}else if(w<645){r=1;g=-(w-645)/65}else r=1;
+  const f=w<420?0.35+0.65*(w-380)/40:1;return [r*f,g*f,b*f]}
+
+/* ---------- canvases ---------- */
+const app=document.getElementById("app"), scr=document.getElementById("scr");
+const ax=app.getContext("2d"), sx=scr.getContext("2d");
+const MONO='ui-monospace,Menlo,Consolas,monospace';
+function fit(cv,ctx){const r=cv.getBoundingClientRect(),dp=window.devicePixelRatio||1;
+  const w=Math.max(1,Math.round(r.width*dp)),h=Math.max(1,Math.round(r.height*dp));
+  if(cv.width!==w||cv.height!==h){cv.width=w;cv.height=h}ctx.setTransform(dp,0,0,dp,0,0);return [r.width,r.height]}
+
+/* fringe buffer */
+const NB=220, buf=document.createElement("canvas");buf.width=buf.height=NB;
+const bctx=buf.getContext("2d"), img=bctx.createImageData(NB,NB);
+let jit=0;
+function drawFringes(){
+  const [W,H]=fit(scr,sx); sx.clearRect(0,0,W,H);
+  const L=lam()/1000;                         // µm
+  const dd=D0+st.d+(S.noise?jit:0);
+  const ex=extraOPD(), sh=etherShift();
+  const [cr,cg,cb]=nmToRGB(lam());
+  const p=img.data, half=NB/2;
+  for(let j=0;j<NB;j++)for(let i=0;i<NB;i++){
+    const x=(i-half+0.5)/half, y=(j-half+0.5)/half, rho2=x*x+y*y, k=(j*NB+i)*4;
+    if(rho2>1){p[k]=p[k+1]=p[k+2]=0;p[k+3]=0;continue}
+    const th2=rho2*THMAX*THMAX, cs=1-th2/2;
+    const opd=2*dd*cs+ex;
+    const I=0.5*(1+Math.cos(2*Math.PI*(opd/L+sh)))*Math.exp(-rho2*0.9);
+    const v=255*I;p[k]=v*cr;p[k+1]=v*cg;p[k+2]=v*cb;p[k+3]=255;
+  }
+  bctx.putImageData(img,0,0);
+  const R=Math.min(W,H)*0.46, cx=W/2, cy=H/2;
+  sx.fillStyle="#03080F";sx.beginPath();sx.arc(cx,cy,R,0,7);sx.fill();
+  sx.imageSmoothingEnabled=true;sx.drawImage(buf,cx-R,cy-R,2*R,2*R);
+  sx.strokeStyle="rgba(238,232,216,0.35)";sx.lineWidth=1;
+  sx.beginPath();sx.moveTo(cx-8,cy);sx.lineTo(cx+8,cy);sx.moveTo(cx,cy-8);sx.lineTo(cx,cy+8);sx.stroke();
+  sx.strokeStyle="#27445F";sx.lineWidth=6;sx.beginPath();sx.arc(cx,cy,R,0,7);sx.stroke();
+}
+
+/* apparatus */
+function drawApp(){
+  const [W,H]=fit(app,ax); ax.clearRect(0,0,W,H);
+  const land=W>H*1.25;
+  // region for optics and for instrument
+  let ox,oy,os, ix,iy,ir;
+  if(st.part===3){ox=W/2;oy=H/2;os=Math.min(W,H)*0.40;}
+  else if(H>W*0.9){ox=W*0.47;oy=H*0.30;os=Math.min(W*0.33,H*0.22);ix=W*0.5;iy=H*0.74;ir=Math.min(W*0.32,H*0.19);}
+  else if(land){ox=W*0.32;oy=H*0.5;os=Math.min(W*0.30,H*0.42);ix=W*0.76;iy=H*0.5;ir=Math.min(W*0.2,H*0.38);}
+  else{ox=W*0.30;oy=H*0.52;os=Math.min(W*0.27,H*0.42);ix=W*0.75;iy=H*0.52;ir=Math.min(W*0.2,H*0.4);}
+  const [cr,cg,cb]=nmToRGB(lam());
+  const beam=`rgba(${cr*255|0},${cg*255|0},${cb*255|0},0.8)`;
+  ax.save();ax.translate(ox,oy);
+  if(st.part===3){
+    ax.fillStyle="#132B44";ax.strokeStyle="#3A5A7A";ax.lineWidth=1.5;
+    ax.beginPath();ax.arc(0,0,os*1.12,0,7);ax.fill();ax.stroke();
+    ax.rotate(st.rotShow*Math.PI/180);
+  }
+  const s=os;
+  // beams: laser(-s,0) -> BS(0,0) -> M1(0,-s) & M2(s,0); screen (0,s)
+  ax.strokeStyle=beam;ax.lineWidth=1.6;
+  ax.beginPath();ax.moveTo(-s*0.78,0);ax.lineTo(s*0.92,0);ax.moveTo(0,-s*0.92);ax.lineTo(0,s*0.80);ax.stroke();
+  // laser
+  ax.fillStyle="#1A3550";ax.strokeStyle="#4C6E90";ax.lineWidth=1.5;
+  ax.fillRect(-s,-s*0.08,s*0.22,s*0.16);ax.strokeRect(-s,-s*0.08,s*0.22,s*0.16);
+  // beam splitter
+  ax.strokeStyle="#C9D3DD";ax.lineWidth=3;ax.beginPath();ax.moveTo(-s*0.1,s*0.1);ax.lineTo(s*0.1,-s*0.1);ax.stroke();
+  // M1 fixed
+  ax.fillStyle="#C9D3DD";ax.fillRect(-s*0.14,-s*0.98,s*0.28,s*0.06);
+  // M2 movable
+  ax.fillRect(s*0.92,-s*0.14,s*0.06,s*0.28);
+  if(st.part===1){ax.strokeStyle="#7FD4A8";ax.lineWidth=1.5;ax.beginPath();ax.moveTo(s*1.0,0);ax.lineTo(s*1.08,0);ax.stroke();}
+  // vacuum cell
+  if(st.part===2){const a=s*0.35,b=s*0.75,h=s*0.13;
+    ax.fillStyle=`rgba(140,200,255,${0.08+0.22*st.P/PATM})`;ax.fillRect(a,-h,b-a,2*h);
+    ax.strokeStyle="#9FB3C6";ax.lineWidth=1.2;ax.strokeRect(a,-h,b-a,2*h);
+    ax.strokeStyle="#4C6E90";ax.beginPath();ax.moveTo((a+b)/2,h);ax.lineTo((a+b)/2,s*0.45);ax.stroke();
+    ax.save();if(st.part===2){ax.fillStyle="#C9D3DD";ax.font=`11px ${MONO}`;ax.textAlign="center";ax.fillText("L = "+(CELL_L*100).toFixed(1)+" cm",(a+b)/2,-h-6)}ax.restore();}
+  // screen
+  ax.fillStyle="#2A4A6A";ax.fillRect(-s*0.18,s*0.80,s*0.36,s*0.07);
+  // labels
+  ax.fillStyle="#8C99A8";ax.font=`11px ${MONO}`;ax.textAlign="center";
+  ax.fillText("M1",s*0.24,-s*0.9);ax.fillText("M2",s*0.95,-s*0.2);ax.fillText("BS",-s*0.2,-s*0.12);
+  ax.restore();
+  if(st.part===1)drawMic(ix,iy,ir);
+  if(st.part===2)drawGauge(ix,iy,ir);
+  if(st.part===3){ax.fillStyle="#E8B23A";ax.font=`13px ${MONO}`;ax.textAlign="left";ax.fillText(Math.round(st.rotShow)+"°",12,22);}
+}
+function drawMic(cx,cy,R){
+  // thimble dial: 25 divisions per revolution, 1 div = 1 µm of mirror travel
+  const v=st.d, rev=Math.floor(v/25), frac=(v%25)/25;
+  ax.fillStyle="#10263D";ax.strokeStyle="#4C6E90";ax.lineWidth=2;ax.beginPath();ax.arc(cx,cy,R,0,7);ax.fill();ax.stroke();
+  ax.save();ax.translate(cx,cy);ax.rotate(-frac*2*Math.PI);
+  ax.strokeStyle="#C9D3DD";ax.fillStyle="#C9D3DD";ax.font=`${Math.max(10,R*0.13)|0}px ${MONO}`;ax.textAlign="center";ax.textBaseline="middle";
+  for(let i=0;i<50;i++){const a=i/50*2*Math.PI-Math.PI/2,big=i%10===0,mid=i%2===0;
+    const r1=R*0.97,r2=R*(big?0.80:mid?0.86:0.91);
+    ax.lineWidth=big?1.6:1;ax.beginPath();ax.moveTo(r1*Math.cos(a),r1*Math.sin(a));ax.lineTo(r2*Math.cos(a),r2*Math.sin(a));ax.stroke();
+    if(big){const rl=R*0.66;ax.save();ax.translate(rl*Math.cos(a),rl*Math.sin(a));ax.rotate(a+Math.PI/2);ax.fillText(String(i/2),0,0);ax.restore()}}
+  ax.restore();
+  // index mark
+  ax.fillStyle="#7FD4A8";ax.beginPath();ax.moveTo(cx,cy-R*1.0);ax.lineTo(cx-6,cy-R-10);ax.lineTo(cx+6,cy-R-10);ax.closePath();ax.fill();
+  // revolution window
+  ax.fillStyle="#06121F";ax.strokeStyle="#4C6E90";ax.lineWidth=1;
+  const bw=R*0.5,bh=R*0.28;ax.fillRect(cx-bw/2,cy-bh/2,bw,bh);ax.strokeRect(cx-bw/2,cy-bh/2,bw,bh);
+  ax.fillStyle="#E8B23A";ax.font=`${Math.max(12,R*0.17)|0}px ${MONO}`;ax.textAlign="center";ax.textBaseline="middle";
+  ax.fillText(String(rev*25),cx,cy+1);
+  ax.fillStyle="#8C99A8";ax.font=`11px ${MONO}`;ax.textBaseline="alphabetic";
+  ax.fillText("µm",cx,cy+R+16);
+}
+function drawGauge(cx,cy,R){
+  ax.fillStyle="#10263D";ax.strokeStyle="#4C6E90";ax.lineWidth=2;ax.beginPath();ax.arc(cx,cy,R,0,7);ax.fill();ax.stroke();
+  const a0=Math.PI*0.75, sw=Math.PI*1.5, max=110;
+  ax.strokeStyle="#C9D3DD";ax.fillStyle="#C9D3DD";ax.font=`${Math.max(10,R*0.12)|0}px ${MONO}`;ax.textAlign="center";ax.textBaseline="middle";
+  for(let v=0;v<=max;v+=1){const a=a0+sw*v/max,big=v%10===0,mid=v%5===0;
+    const r1=R*0.94,r2=R*(big?0.78:mid?0.84:0.89);ax.lineWidth=big?1.6:0.8;
+    ax.beginPath();ax.moveTo(cx+r1*Math.cos(a),cy+r1*Math.sin(a));ax.lineTo(cx+r2*Math.cos(a),cy+r2*Math.sin(a));ax.stroke();
+    if(big&&v%20===0)ax.fillText(String(v),cx+R*0.64*Math.cos(a),cy+R*0.64*Math.sin(a));}
+  const a=a0+sw*st.P/max;
+  ax.strokeStyle="#E8B23A";ax.lineWidth=2.5;ax.beginPath();ax.moveTo(cx,cy);ax.lineTo(cx+R*0.86*Math.cos(a),cy+R*0.86*Math.sin(a));ax.stroke();
+  ax.fillStyle="#E8B23A";ax.beginPath();ax.arc(cx,cy,4,0,7);ax.fill();
+  ax.fillStyle="#8C99A8";ax.font=`11px ${MONO}`;ax.textBaseline="alphabetic";ax.fillText("kPa",cx,cy+R*0.45);
+}
+
+/* ---------- loop ---------- */
+let last=0;
+function loop(t){
+  const dt=last?Math.min(0.05,(t-last)/1000):0; last=t;
+  if(st.part===1&&st.rate){st.d=Math.min(75,Math.max(0,st.d+st.rate*dt))}
+  if(st.part===2&&st.prate){st.P=Math.min(PATM,Math.max(5,st.P+st.prate*dt))}
+  if(st.part===3){const dr=st.rot-st.rotShow;st.rotShow+=Math.sign(dr)*Math.min(Math.abs(dr),40*dt)}
+  if(S.noise)jit=0.012*Math.sin(t/90)+0.006*Math.sin(t/37);
+  drawApp();drawFringes();
+  requestAnimationFrame(loop);
+}
+
+/* ---------- controls ---------- */
+const rowA=document.getElementById("rowA");
+function chip(txt,on,fn,cls){const b=document.createElement("button");b.className="ch"+(cls?" "+cls:"")+(on?" on":"");b.textContent=txt;if(fn)b.onclick=fn;return b}
+function lab(t){const s=document.createElement("span");s.className="lb";s.textContent=t;return s}
+function hold(txt,set){const b=chip(txt,false,null,"hold");
+  const on=e=>{e.preventDefault();b.classList.add("on");set(true)}, off=()=>{b.classList.remove("on");set(false)};
+  b.addEventListener("pointerdown",on);["pointerup","pointerleave","pointercancel"].forEach(ev=>b.addEventListener(ev,off));
+  b.addEventListener("contextmenu",e=>e.preventDefault());return b}
+function gap(){const s=document.createElement("span");s.style.width="10px";s.style.flexShrink="0";return s}
+function buildRows(){
+  rowA.innerHTML="";st.rate=0;st.prate=0;
+  if(st.part===1){
+    rowA.appendChild(lab(T[lang].laser));
+    LAS.forEach((l,i)=>rowA.appendChild(chip(lasName(i),st.las===i,()=>{st.las=i;buildRows()})));
+    rowA.appendChild(gap());rowA.appendChild(lab(T[lang].mic));
+    [["◀◀",-1.5],["◀",-0.25],["▶",0.25],["▶▶",1.5]].forEach(([s,r])=>rowA.appendChild(hold(s,v=>{st.rate=v?r:0})));
+  }else if(st.part===2){
+    rowA.appendChild(lab("λ = "+LAM2+" nm"));rowA.appendChild(gap());
+    rowA.appendChild(hold(T[lang].pump,v=>{st.prate=v?-3:0}));
+    rowA.appendChild(hold(T[lang].air,v=>{st.prate=v?3:0}));
+  }else{
+    rowA.appendChild(lab(T[lang].rot));
+    ROT.forEach(r=>rowA.appendChild(chip(r+"°",st.rot===r,()=>{st.rot=r;buildRows()})));
+  }
+  document.querySelectorAll("[data-part]").forEach(b=>b.classList.toggle("on",+b.dataset.part===st.part));
+  document.getElementById("subT").textContent=T[lang]["sub"+st.part];
+}
+document.querySelectorAll("[data-part]").forEach(b=>b.onclick=()=>{st.part=+b.dataset.part;buildRows()});
+
+function applyLang(){
+  document.documentElement.lang=lang;
+  document.querySelectorAll("[data-t]").forEach(e=>e.textContent=T[lang][e.dataset.t]);
+  document.querySelectorAll("[data-ph]").forEach(e=>e.placeholder=T[lang][e.dataset.ph]);
+  document.getElementById("langB").textContent=lang==="en"?"ไทย":"EN";
+  document.getElementById("credit").textContent=T[lang].credit;
+  document.getElementById("lockTag").style.display=locked?"inline-block":"none";
+  document.title=T[lang].title;
+  buildRows(); if(document.getElementById("tM").classList.contains("show"))fillTeacher();
+}
+document.getElementById("langB").onclick=()=>{lang=lang==="en"?"th":"en";applyLang()};
+
+/* ---------- teacher ---------- */
+const $=id=>document.getElementById(id);
+function show(id){$(id).classList.add("show")} function hide(id){$(id).classList.remove("show")}
+document.querySelectorAll("[data-close]").forEach(b=>b.onclick=()=>hide(b.dataset.close));
+$("tchB").onclick=()=>{$("pwI").value="";$("pwMsg").textContent="";show("pwM");setTimeout(()=>$("pwI").focus(),50)};
+function tryPw(){const h=sha256(norm($("pwI").value)),cur=lsGet(LS_PW)||PW_HASH;
+  if(h===cur){hide("pwM");fillTeacher();show("tM")}else $("pwMsg").textContent=T[lang].wrong}
+$("pwGo").onclick=tryPw;$("pwI").addEventListener("keydown",e=>{if(e.key==="Enter")tryPw()});
+
+function fillTeacher(){
+  $("nzI").checked=S.noise;$("nmI").checked=S.names;$("etI").checked=S.ether;$("apMsg").textContent="";$("lkMsg").textContent="";
+  const th=lang==="th";
+  let h=`<p><b>${th?"ตอนที่ 1":"Part 1"}</b> · λ = 2d/N</p><table><tr><th>${th?"เลเซอร์":"Laser"}</th><th>${th?"ชื่อ":"Name"}</th><th>λ (nm)</th><th>N ${th?"ต่อ":"per"} d = 10 µm</th></tr>`;
+  LAS.forEach(l=>{h+=`<tr class="mono"><td>${l.k}</td><td>${l[lang]}</td><td>${l.nm}</td><td>${(2*10000/l.nm).toFixed(1)}</td></tr>`});
+  const Nfull=2*CELL_L*NM1/(LAM2*1e-9);
+  h+=`</table><p style="margin-top:8px"><b>${th?"ตอนที่ 2":"Part 2"}</b> · n − 1 = Nλ/(2L) × (P<sub>atm</sub>/ΔP)</p>`;
+  h+=`<p class="mono">n<sub>air</sub> = 1 + ${NM1.toExponential(2)} (101.3 kPa) · ${th?"ริ้วต่อ 10 kPa":"fringes per 10 kPa"} = ${(Nfull*10/PATM).toFixed(2)} · ${th?"ทั้งหมด 101.3→0 kPa":"total 101.3→0 kPa"} = ${Nfull.toFixed(1)}</p>`;
+  h+=`<p style="margin-top:8px"><b>${th?"ตอนที่ 3":"Part 3"}</b> · ${th?"ผลจริง: ริ้วไม่เลื่อนเลยเมื่อหมุนเครื่อง · ทฤษฎีอีเธอร์ทำนายว่าเลื่อน 0.4 ริ้ว ที่ 90°":"Real result: no fringe shift when rotated · ether theory predicts 0.4 fringe at 90°"}</p>`;
+  $("ans").innerHTML=h;
+  $("guide").innerHTML=th?
+   `<ol><li>ตอนที่ 1: อ่านไมโครมิเตอร์ (ตัวเลขในช่อง + ค่าบนหน้าปัด, 1 ช่อง = 1 µm)</li>
+   <li>กด ▶ ค้างไว้ นับริ้วที่ผุดออกจากจุดกลาง N ริ้ว (เช่น 20 หรือ 50) แล้วอ่านไมโครมิเตอร์อีกครั้ง ได้ระยะ d</li>
+   <li>λ = 2d/N · ทำซ้ำกับเลเซอร์ทุกตัว</li>
+   <li>ตอนที่ 2: กด "สูบออก" ค้างไว้ นับริ้วที่เลื่อน N และอ่านความดันที่ลดลง ΔP</li>
+   <li>n − 1 = (Nλ/2L)(P<sub>atm</sub>/ΔP) · เขียนกราฟ N กับ P ได้เส้นตรง</li>
+   <li>ตอนที่ 3: หมุนเครื่อง 0°→90° สังเกตว่าริ้วเลื่อนไหม แล้วเทียบกับที่ทฤษฎีอีเธอร์ทำนาย</li></ol>`:
+   `<ol><li>Part 1: read the micrometer (number in the window + dial, 1 div = 1 µm).</li>
+   <li>Hold ▶ and count N fringes coming out of the centre (e.g. 20 or 50), then read the micrometer again → distance d.</li>
+   <li>λ = 2d/N. Repeat for every laser.</li>
+   <li>Part 2: hold "Pump", count the fringes N and read the pressure drop ΔP.</li>
+   <li>n − 1 = (Nλ/2L)(P<sub>atm</sub>/ΔP). A graph of N vs P is a straight line.</li>
+   <li>Part 3: rotate 0°→90° and see whether the fringes shift; compare with the ether prediction.</li></ol>`;
+}
+$("apply").onclick=()=>{S={noise:$("nzI").checked,names:$("nmI").checked,ether:$("etI").checked};
+  if(!locked)lsSet(LS_SET,enc(S));buildRows();fillTeacher();$("apMsg").textContent=T[lang].applied};
+$("mkL").onclick=()=>{
+  if(location.origin==="null"||location.protocol==="file:"){$("lkMsg").className="msg err";$("lkMsg").textContent=T[lang].nullOrigin;$("lkOut").textContent="";return}
+  const o={noise:$("nzI").checked,names:$("nmI").checked,ether:$("etI").checked};
+  $("lkOut").textContent=location.origin+location.pathname+"?s="+enc(o);$("lkMsg").textContent=""};
+$("cpL").onclick=async()=>{const s=$("lkOut").textContent;if(!s)return;
+  try{await navigator.clipboard.writeText(s)}catch(e){const ta=document.createElement("textarea");ta.value=s;document.body.appendChild(ta);ta.select();try{document.execCommand("copy")}catch(_){}ta.remove()}
+  $("lkMsg").className="msg ok";$("lkMsg").textContent=T[lang].copied};
+$("chPw").onclick=()=>{const m=$("pwChMsg");
+  const h=sha256(norm($("emI").value).toLowerCase()+"\n"+norm($("apI").value));
+  if(h!==ACC_HASH){m.className="msg err";m.textContent=T[lang].pwBad;return}
+  const np=norm($("npI").value);if(!np){m.className="msg err";m.textContent=T[lang].pwEmpty;return}
+  lsSet(LS_PW,sha256(np));m.className="msg ok";m.textContent=T[lang].pwOk;$("emI").value=$("apI").value=$("npI").value=""};
+
+applyLang();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
